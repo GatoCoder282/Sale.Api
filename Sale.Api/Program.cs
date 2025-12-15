@@ -15,72 +15,97 @@ namespace Sale.Api
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Initialize DatabaseConnection singleton
+            // 1. Inicializar DB
             DatabaseConnection.Initialize(builder.Configuration);
 
-            // Add services to the container.
             builder.Services.AddControllers();
             builder.Services.AddOpenApi();
 
-            // DI: domain/application wiring
+            // 2. Inyección de Dependencias
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
             builder.Services.AddScoped<ISaleService, Sale.Application.Services.SaleService>();
-
-            // Messaging / outbox / idempotency registrations
             builder.Services.AddSingleton<IEventPublisher, RabbitPublisher>();
-
-            // Register OutboxRepository for background processor as transient using a plain connection (no transaction)
+            builder.Services.AddSingleton<IIdempotencyStore, IdempotencyRepository>();
             builder.Services.AddTransient<IOutboxRepository>(sp =>
                 new OutboxRepository(DatabaseConnection.Instance.GetConnection(), null));
 
-            // Idempotency repository can be singleton (it manages its own connections)
-            builder.Services.AddSingleton<IIdempotencyStore, IdempotencyRepository>();
-
-            // Hosted services
             builder.Services.AddHostedService<OutboxProcessor>();
             builder.Services.AddHostedService<RabbitConsumer>();
 
-            // 1. CONFIGURACIÓN JWT
-            var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-            var secretKey = jwtSettings.GetValue<string>("SecretKey");
-            var issuer = jwtSettings.GetValue<string>("Issuer");
-            var audience = jwtSettings.GetValue<string>("Audience");
+            // =================================================================
+            // 3. CONFIGURACIÓN JWT (Sincronizada con tu JwtTokenService)
+            // =================================================================
 
-            var keyBytes = Encoding.UTF8.GetBytes(secretKey!);
+            // Usamos "Jwt" porque así está en tu appsettings.json
+            var jwtSection = builder.Configuration.GetSection("Jwt");
+            var secretKey = jwtSection.GetValue<string>("Key");
+            var issuer = jwtSection.GetValue<string>("Issuer");
+            var audience = jwtSection.GetValue<string>("Audience");
+
+            if (string.IsNullOrEmpty(secretKey)) throw new Exception("Falta Jwt:Key en appsettings");
+
+            // IMPORTANTE: Usamos UTF8 porque tu JwtTokenService usa Encoding.UTF8.GetBytes
+            var keyBytes = Encoding.UTF8.GetBytes(secretKey);
 
             builder.Services.AddAuthentication(config => {
                 config.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 config.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
             }).AddJwtBearer(config => {
-                config.RequireHttpsMetadata = false; // Pon en true para Producción
+                config.RequireHttpsMetadata = false;
                 config.SaveToken = true;
+
                 config.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+
                     ValidateIssuer = true,
+                    ValidIssuer = issuer, // Debe ser "FarmaArquiSoft"
+
                     ValidateAudience = true,
+                    ValidAudience = audience, // Debe ser "FarmaArquiSoftClients"
+
                     ValidateLifetime = true,
-                    ValidIssuer = issuer,
-                    ValidAudience = audience,
-                    ClockSkew = TimeSpan.Zero // Para que el token expire exactamente cuando dice
+                    ClockSkew = TimeSpan.Zero
+                };
+
+                // ?? ESTO ES ORO PURO: EVENTOS DE DEPURACIÓN
+                // Si el token falla, esto imprimirá el error exacto en la consola de "dotnet run"
+                config.Events = new JwtBearerEvents
+                {
+                    OnAuthenticationFailed = context =>
+                    {
+                        Console.WriteLine("?? AUTH FAILED: " + context.Exception.Message);
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = context =>
+                    {
+                        Console.WriteLine("?? TOKEN VALIDATED for: " + context.Principal?.Identity?.Name);
+                        return Task.CompletedTask;
+                    },
+                    OnChallenge = context =>
+                    {
+                        Console.WriteLine("?? CHALLENGE: " + context.Error + " - " + context.ErrorDescription);
+                        return Task.CompletedTask;
+                    }
                 };
             });
 
-            builder.Services.AddControllers();
-
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
                 app.MapOpenApi();
             }
 
             app.UseHttpsRedirection();
-            app.UseAuthentication();
-            app.UseAuthorization();
+
+            // 4. Activar Seguridad
+            app.UseAuthentication(); // <-- Identifica al usuario
+            app.UseAuthorization();  // <-- Verifica permisos
+
             app.MapControllers();
+
             app.Run();
         }
     }

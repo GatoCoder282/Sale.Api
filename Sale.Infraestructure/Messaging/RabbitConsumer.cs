@@ -33,7 +33,7 @@ namespace Sale.Infraestructure.Messaging
             var factory = new ConnectionFactory
             {
                 HostName = cfg["RabbitMQ:Host"] ?? "localhost",
-                UserName = cfg["RabbitMQ:User"] ?? "guest",
+                UserName = cfg["RabbitMQ:User"] ?? "guest", 
                 Password = cfg["RabbitMQ:Password"] ?? "guest",
                 DispatchConsumersAsync = true
             };
