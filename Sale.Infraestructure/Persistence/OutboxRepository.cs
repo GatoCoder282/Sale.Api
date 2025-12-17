@@ -65,13 +65,27 @@ VALUES (@id, @aggregate_id, @rk, @payload, @status, @created_at, @attempts, @err
                 using var rdr = await cmd.ExecuteReaderAsync();
                 while (await rdr.ReadAsync())
                 {
+                    // Leer id y aggregate_id de forma flexible: pueden venir como Guid o como string
+                    string ReadStringFlexible(string col)
+                    {
+                        var ord = rdr.GetOrdinal(col);
+                        if (rdr.IsDBNull(ord)) return string.Empty;
+                        var val = rdr.GetValue(ord);
+                        return val switch
+                        {
+                            Guid g => g.ToString(),
+                            string s => s,
+                            _ => val?.ToString() ?? string.Empty
+                        };
+                    }
+
                     list.Add(new OutboxMessage
                     {
-                        Id = rdr.GetString("id"),
-                        AggregateId = rdr.GetString("aggregate_id"),
-                        RoutingKey = rdr.GetString("routing_key"),
-                        Payload = rdr.GetString("payload"),
-                        Status = rdr.GetString("status"),
+                        Id = ReadStringFlexible("id"),
+                        AggregateId = ReadStringFlexible("aggregate_id"),
+                        RoutingKey = rdr.IsDBNull(rdr.GetOrdinal("routing_key")) ? string.Empty : rdr.GetString("routing_key"),
+                        Payload = rdr.IsDBNull(rdr.GetOrdinal("payload")) ? string.Empty : rdr.GetString("payload"),
+                        Status = rdr.IsDBNull(rdr.GetOrdinal("status")) ? string.Empty : rdr.GetString("status"),
                         CreatedAt = rdr.GetDateTime("created_at"),
                         PublishedAt = rdr.IsDBNull(rdr.GetOrdinal("published_at")) ? null : rdr.GetDateTime("published_at"),
                         AttemptCount = rdr.GetInt32("attempt_count"),
