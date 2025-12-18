@@ -11,7 +11,6 @@ namespace Sale.Infraestructure.Messaging
 {
     public class OutboxProcessor : BackgroundService
     {
-        // 1. Cambiamos el Repositorio por el Factory
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IEventPublisher _publisher;
         private readonly ILogger<OutboxProcessor> _log;
@@ -20,7 +19,7 @@ namespace Sale.Infraestructure.Messaging
 
         public OutboxProcessor(IServiceScopeFactory scopeFactory, IEventPublisher publisher, ILogger<OutboxProcessor> log, Microsoft.Extensions.Configuration.IConfiguration cfg)
         {
-            _scopeFactory = scopeFactory; // Inyectamos la fábrica
+            _scopeFactory = scopeFactory;
             _publisher = publisher;
             _log = log;
             _batchSize = int.TryParse(cfg["Outbox:BatchSize"], out var bs) ? bs : 50;

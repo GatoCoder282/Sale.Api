@@ -33,7 +33,7 @@ namespace Sale.Infraestructure.Messaging
         {
             var body = JsonSerializer.SerializeToUtf8Bytes(@event);
             var props = _channel.CreateBasicProperties();
-            props.DeliveryMode = 2; // persistent
+            props.DeliveryMode = 2; 
             _channel.BasicPublish(_exchange, routingKey, props, body);
             return Task.CompletedTask;
         }

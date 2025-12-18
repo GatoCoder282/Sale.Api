@@ -1,6 +1,6 @@
 ﻿using MySql.Data.MySqlClient;
 using Sale.Domain.Ports;
-using Sale.Infraestructure.Data; // Usamos tu namespace
+using Sale.Infraestructure.Data; 
 using System;
 using System.Threading.Tasks;
 
