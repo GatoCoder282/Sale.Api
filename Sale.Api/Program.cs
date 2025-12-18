@@ -132,9 +132,6 @@ namespace Sale.Api
                 app.UseSwaggerUI();
             }
 
-            //app.UseHttpsRedirection();
-
-            // Usar CORS antes de la autenticación
             app.UseCors("AllowAll");
 
             app.UseAuthentication();
@@ -146,3 +143,4 @@ namespace Sale.Api
         }
     }
 }
+
