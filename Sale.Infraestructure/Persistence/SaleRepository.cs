@@ -82,27 +82,40 @@ VALUES
         public async Task<IEnumerable<SaleEntity>> GetAll()
         {
             var lista = new List<SaleEntity>();
+            // IMPORTANTE: Usa comillas invertidas `date` porque es palabra reservada
             const string query = "SELECT * FROM sales WHERE is_deleted = FALSE ORDER BY `date` ASC;";
 
-            using var comand = new MySqlCommand(query, _connection, _transaction);
-            using var reader = await comand.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
+            try
             {
-                lista.Add(new SaleEntity
+                // 👇 ESTA ES LA MAGIA QUE TE FALTA 👇
+                if (_connection.State != System.Data.ConnectionState.Open)
                 {
-                    id = reader.GetString("id"),
-                    date = reader.GetDateTime("date"),
-                    totalAmount = reader.GetDecimal("total_amount"),
-                    clientId = reader.GetString("client_id"),
-                    status = reader.GetString("status"),
+                    await _connection.OpenAsync();
+                }
+                // 👆 SIN ESTO, EXPLOTA CON ERROR 500 👆
 
-                    is_deleted = reader.GetBoolean("is_deleted"),
-                    created_by = reader.IsDBNull(reader.GetOrdinal("created_by")) ? null : reader.GetString("created_by"),
-                    updated_by = reader.IsDBNull(reader.GetOrdinal("updated_by")) ? null : reader.GetString("updated_by"),
-                    created_at = reader.GetDateTime("created_at"),
-                    updated_at = reader.IsDBNull(reader.GetOrdinal("updated_at")) ? null : reader.GetDateTime("updated_at")
-                });
+                using var comand = new MySqlCommand(query, _connection, _transaction);
+                using var reader = await comand.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    lista.Add(new SaleEntity
+                    {
+                        id = reader.GetGuid("id").ToString(),
+                        date = reader.GetDateTime("date"),
+                        totalAmount = reader.GetDecimal("total_amount"), // Asegurate que coincida con tu BD
+                        clientId = reader.GetString("client_id"),
+                        status = reader.GetString("status"),
+                        // ... resto de mapeos ...
+                        is_deleted = reader.GetBoolean("is_deleted"),
+                        created_at = reader.GetDateTime("created_at")
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR FATAL EN REPOSITORIO: {ex.Message}");
+                throw; // Re-lanza el error para que el Controller lo vea
             }
 
             return lista;
